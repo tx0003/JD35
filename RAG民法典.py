@@ -1,8 +1,6 @@
 import os
 from langchain_openai import ChatOpenAI
 from langchain_community.document_loaders import PyPDFLoader
-
-os.environ["OPENAI_API_KEY"]="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"
  
 chat=ChatOpenAI(
      openai_api_key=os.environ["OPENAI_API_KEY"],
