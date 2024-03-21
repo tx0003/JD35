@@ -26,35 +26,37 @@ from langchain_community.vectorstores import Chroma
 embed_model=OpenAIEmbeddings()
 vectorstore=Chroma.from_documents(documents=docs,embedding=embed_model,collection_name="openai_embed") 
 
-#增强
-def augment_prompt(query:str):
-    results=vectorstore.similarity_search(query,k=10)
-    source_knowledge="\n".join([x.page_content for x in results])
-    augmented_prompt= f"""Using the contexts below, answer the query.
-    
-    contexts:
-    {source_knowledge}
-    
-    query:{query}"""
-    return augmented_prompt
-    
-from langchain.schema import (
-    SystemMessage,
-    HumanMessage,
-    AIMessage
-)
-messages=[
-    SystemMessage(content="You are a helpful assistant."),
-    HumanMessage(content="knock knock."),
-    AIMessage(content="Who is there"),
-    HumanMessage(content="Orange"),
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain.chains import create_retrieval_chain
+from langchain.prompts.chat import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_template("""使用下面的语料来回答本模板最末尾的问题。如果你不知道问题的答案，直接回答 "我不知道"。 
+        以下是语料：
+<context>
+{context}
+</context>
+
+Question: {input}""")
+
+#创建检索链
+document_chain = create_stuff_documents_chain(chat, prompt)
+
+retriever = vectorstore.as_retriever()
+retrieval_chain = create_retrieval_chain(retriever, document_chain)
+
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chains import ConversationChain
+
+memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+qa = ConversationalRetrievalChain.from_llm(chat, vectorstore.as_retriever(), memory=memory)
+
+questions = [
+  "小王在签合同时没认真看格式条款，对方也未做出说明，事后小王觉得自己遭遇“霸王条款”，相关条款有效吗？",
+  "他后续应该怎么办？"
 ]
-
-query=input("请提出你的问题：")
-
-prompt=HumanMessage(
-    content=augment_prompt(query)
-)
-messages.append(prompt)
-res=chat(messages)
-print(res.content)
+for question in questions:
+        print(question)
+        answer = qa.invoke(question)["answer"]
+        print(answer)
+        print()
